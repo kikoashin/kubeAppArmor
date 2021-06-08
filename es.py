@@ -58,6 +58,8 @@ def filter(doc, subset, no_use_keys, es):
         print("scroll_size is: ", scroll_size)
     elastic_df = pandas.DataFrame(fields)
     elastic_df = elastic_df.drop_duplicates(subset)
+    for column in elastic_df:
+        elastic_df[column] = elastic_df[column].str.replace('"', "")
     print ('elastic_df:', type(elastic_df), "\n")
     #print (elastic_df) # print out the DF object's contents
     return elastic_df
@@ -141,11 +143,17 @@ def capRuleGenerator(es):
     return filter(doc, subset, no_use_keys, es)
 
 def main():
-    df_net = netRuleGenerator(es)
-    print(df_net)
-    df_file = fileRuleGenerator(es)
-    print(df_file)
+    #df_net = netRuleGenerator(es)
+    #df_net['rule'] = df_net[['family', 'sock_type']].agg(" ".join, axis=1)
+    #df_net['rule'] = 'network ' + df_net['rule'].astype(str) + ','
+    #print(df_net)
+    #df_file = fileRuleGenerator(es)
+    #df_file['rule'] = df_file[['name', 'requested_mask']].agg(" ".join, axis=1)
+    #print(df_file)
+    #df_file.to_csv("test.txt", columns=["rule"], header=False, index=False)
+    #print(type(df_file['rule'][0]))
     df_cap = capRuleGenerator(es)
+    df_cap['rule'] = 'capability ' + df_cap['capname'].astype(str) + ','
     print(df_cap)
 
 
