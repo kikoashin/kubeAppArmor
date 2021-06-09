@@ -1,12 +1,14 @@
 from elasticsearch import Elasticsearch
 import numpy as np
 import pandas
-import json
+import glob_rules
 
 #The from parameter defines the offset from the first result you want to fetch. 
 #The size parameter allows you to configure the maximum amount of hits to be returned.
 es = Elasticsearch()
 total_docs = 10000
+#profile_name = "docker_redis"
+profile_name = "docker_flaskapp"
 
 
 """ doc = {
@@ -38,29 +40,28 @@ def filter(doc, subset, no_use_keys, es):
     res = es.search(index="fluentd", size=total_docs, body=doc, scroll='5s')
 
     sid = res['_scroll_id']
-    print("scroll_id is: ", sid)
+    #print("scroll_id is: ", sid)
     elastic_docs = res["hits"]["hits"]
     # get the size of the first scroll
     scroll_size = len(elastic_docs)
-    print("scroll_size is: ", scroll_size)
+    #print("scroll_size is: ", scroll_size)
     # empty dict
     fields = {}
     while scroll_size > 0:
-        print("scrolling......")
+        #print("scrolling......")
         fields = processHits(elastic_docs, no_use_keys, fields)
         res = es.scroll(scroll_id=sid, scroll='5s')
         # Update the scroll ID
         sid = res['_scroll_id']
-        print("new scroll_id is: ", sid)
+        #print("new scroll_id is: ", sid)
         elastic_docs = res["hits"]["hits"]
         # Get the number of results that returned in the last scroll
         scroll_size = len(elastic_docs)
-        print("scroll_size is: ", scroll_size)
+        #print("scroll_size is: ", scroll_size)
     elastic_df = pandas.DataFrame(fields)
     elastic_df = elastic_df.drop_duplicates(subset)
     for column in elastic_df:
         elastic_df[column] = elastic_df[column].str.replace('"', "")
-    print ('elastic_df:', type(elastic_df), "\n")
     #print (elastic_df) # print out the DF object's contents
     return elastic_df
 
@@ -80,7 +81,7 @@ def netRuleGenerator(es):
                     },
                     {
                         "match": {
-                            "body.profile": "docker_redis"
+                            "body.profile": profile_name
                         }
                     }                
                 ]
@@ -89,8 +90,17 @@ def netRuleGenerator(es):
     }
     no_use_keys = ["laddr", "faddr", "lport", "fport", "addr"]
     subset = ["family","sock_type", "protocol"]
-    return filter(doc, subset, no_use_keys, es)
+    df_net = filter(doc, subset, no_use_keys, es)
+    if not df_net.empty:
+        df_net['rule'] = 'network ' + df_net[['family', 'sock_type']].agg(" ".join, axis=1).astype(str) + ','
+        return df_net['rule'], True
+    else:
+        return None, False
 
+#file access rules:
+#FILE RULE = [ QUALIFIERS ] [ 'owner' ] ( 'file' | [ 'file' ] ( FILEGLOB ACCESS  | ACCESS FILEGLOB ) [ '->' EXEC TARGET ] )
+#FILEGLOB -> name
+#ACCESS -> requested_mask
 def fileRuleGenerator(es):
     doc =  {
         "query": {
@@ -103,7 +113,7 @@ def fileRuleGenerator(es):
                     },
                     {
                         "match": {
-                            "body.profile": "docker_redis"
+                            "body.profile": profile_name
                         }
                     }                
                 ]
@@ -112,8 +122,24 @@ def fileRuleGenerator(es):
     }
     no_use_keys = ["info", "target"]
     subset = ["name","requested_mask"]
-    return filter(doc, subset, no_use_keys, es)
+    df_file = filter(doc, subset, no_use_keys, es)
+    #replace global patterns
 
+    if not df_file.empty:
+        #print("df_file is: \n", df_file)
+        df_file['name'] = glob_rules.genSpecAccessPath(df_file['name'])
+        df_file['name'] = glob_rules.genGlobalAccessPath(df_file['name'])
+        df_file['name'] = glob_rules.genFullAccessPath(df_file['name'])
+        df_file['rule'] = df_file[['name', 'requested_mask']].agg(" ".join, axis=1).astype(str) + ','
+        df_file = df_file.drop_duplicates(subset=["rule"])
+        df_file.to_csv("test.txt", columns=["rule"], header=False, index=False)
+        return df_file['rule'], True
+    else:
+        return None, False
+    
+#capability rules
+#CAPABILITY RULE = [ QUALIFIERS ] 'capability' [ CAPABILITY LIST ]
+#CAPABILITY -> capname
 def capRuleGenerator(es):
     doc =  {
         "query": {
@@ -126,7 +152,7 @@ def capRuleGenerator(es):
                     },
                     {
                         "match": {
-                            "body.profile": "docker_redis"
+                            "body.profile": profile_name
                         }
                     },
                     {
@@ -140,21 +166,35 @@ def capRuleGenerator(es):
     }
     no_use_keys = []
     subset = ["capname"]
-    return filter(doc, subset, no_use_keys, es)
+    df_cap = filter(doc, subset, no_use_keys, es)
+    if not df_cap.empty:
+        df_cap['rule'] = 'capability ' + df_cap['capname'].astype(str) + ','
+        return df_cap['rule'], True
+    else:
+        return None, False
 
 def main():
-    #df_net = netRuleGenerator(es)
-    #df_net['rule'] = df_net[['family', 'sock_type']].agg(" ".join, axis=1)
-    #df_net['rule'] = 'network ' + df_net['rule'].astype(str) + ','
-    #print(df_net)
-    #df_file = fileRuleGenerator(es)
-    #df_file['rule'] = df_file[['name', 'requested_mask']].agg(" ".join, axis=1)
-    #print(df_file)
+    """ net_rule, net_flag = netRuleGenerator(es)
+    if net_flag:
+        print("network access policies are:\n", net_rule)
+    else:
+        print("no network access found from the logs") """
+
+    file_rule, file_flag = fileRuleGenerator(es)
+    if file_flag:
+        print("file acccess policies are:\n", file_rule)
+    else:
+        print("no file acccess found from the logs")    
+
     #df_file.to_csv("test.txt", columns=["rule"], header=False, index=False)
     #print(type(df_file['rule'][0]))
-    df_cap = capRuleGenerator(es)
-    df_cap['rule'] = 'capability ' + df_cap['capname'].astype(str) + ','
-    print(df_cap)
+
+    """ cap_rule, cap_flag = capRuleGenerator(es)
+    if cap_flag:
+        print("capability policies are:\n", cap_rule)
+    else:
+        print("no capability found from the logs") """
+    
 
 
 if __name__ == "__main__":
