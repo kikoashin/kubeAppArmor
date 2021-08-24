@@ -287,9 +287,9 @@ def fileAccessRuleGenerator(es):
         dfExecAfterGlobbing['rule'] = dfExecAfterGlobbing[['_source.audit_field_name', '_source.audit_field_info']].agg(" ".join, axis=1).astype(str) + ','
         dfExecAfterGlobbing = dfExecAfterGlobbing.drop_duplicates(subset=["rule"])
         dfExecAfterGlobbing.to_csv("file_rule_{}.txt".format(profile_name), columns=["rule"], mode='w', header=False, index=False)
-        print("file acccess policies are:\n", dfExecAfterGlobbing['rule'])
+        print("file exec policies are:\n", dfExecAfterGlobbing['rule'])
     else:
-        print("no file acccess found from the logs")
+        print("no file exec found from the logs")
 
 #process files with random names (combination of random numbers and letters)
 def randomPathProcessor(profileName):
