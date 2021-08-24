@@ -32,7 +32,21 @@
 								   "/usr/include/curl/", "/var/lib/dpkg/", "/opt/example/example/", 
 								   "/usr/lib/python3.6/", "/usr/local/lib/python3.6/", "/usr/lib/python3/"],
 	"container_special_access_paths": {  "^/data/temp-[0-9]+\\.rdb": "/data/temp-*.rdb",
-										 "/lib/x86_64-linux-gnu/.+": "/lib/x86_64-linux-gnu/**"
+										 "/lib/x86_64-linux-gnu/.+": "/lib/x86_64-linux-gnu/**",
+                     "^/usr/local/lib/python3.6/.+": "/usr/local/lib/python3.6/**"
 									  },
-	"container_build_full_access_paths":["/usr/", "/var/lib/", "/etc/ssh/"]
+    "container_random_file_name": {   "_[A-Z]+[0-9]+[A-Z0-9]*": "_*",
+                      "_[0-9]+[A-Z]+[A-Z0-9]*": "_*",
+                      "[12][0-9]{3}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])":  "*",
+                      "_([01][0-9]|2[123])[0-5][0-9][0-5][0-9]": "_*"
+                    },
+    "container_build_full_access_paths":["/usr/", "/var/lib/", "/etc/ssh/"],
+    "adapted_permission": { "c": "w",
+                          "d": "w",
+                          "wc": "w",
+                          "wrc": "wr",
+                          "wrd": "wr",
+                          "ac": "aw",
+                          "x": "ix"
+  }
 }
